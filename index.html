@@ -7,14 +7,14 @@
   <meta name="theme-color" content="#111111">
   <style>
     body { font-family: system-ui,-apple-system,Segoe UI,Roboto,"PingFang SC","Microsoft YaHei",sans-serif; margin:0; background:#0b0b0c; color:#eee; }
-    .wrap { max-width: 820px; margin: 0 auto; padding: 16px; }
+    .wrap { max-width: 860px; margin: 0 auto; padding: 16px; }
     h2 { margin: 8px 0 6px; }
     .muted { color:#a9a9b2; font-size:13px; line-height: 1.4; }
     .card { background:#141416; border:1px solid #242428; border-radius: 14px; padding: 14px; margin: 12px 0; }
     .row { display:flex; gap:12px; flex-wrap:wrap; }
-    .kpi { flex:1 1 220px; }
+    .kpi { flex:1 1 240px; }
     .label { color:#a9a9b2; font-size: 13px; }
-    .big { font-size: 32px; font-weight: 800; margin-top: 6px; }
+    .big { font-size: 34px; font-weight: 800; margin-top: 6px; }
     .btnrow { display:flex; gap:10px; flex-wrap:wrap; margin-top: 10px; }
     button { background:#2a2a31; color:#fff; border:1px solid #3a3a44; padding:10px 12px; border-radius: 12px; font-weight: 650; }
     button:active { transform: translateY(1px); }
@@ -23,40 +23,51 @@
     .ok { color:#7CFC9A; }
     .warn { color:#FFD166; }
     .pill { display:inline-block; padding:4px 8px; border:1px solid #3a3a44; border-radius:999px; font-size:12px; color:#cfcfd6; margin-left:6px; }
+    .deltaUp { color:#7CFC9A; }
+    .deltaDown { color:#FF6B6B; }
+    .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    @media (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
 <div class="wrap">
-  <h2>GBP/CNY 实时监控 <span class="pill">60s</span> <span class="pill">24h低点</span> <span class="pill">≤0.02提醒</span></h2>
+  <h2>
+    GBP/CNY 实时监控
+    <span class="pill">60s</span>
+    <span class="pill">24h低点</span>
+    <span class="pill">≤0.02提醒</span>
+    <span class="pill">自动记住Key</span>
+  </h2>
+
   <div class="muted">
-    前台打开时每分钟刷新；安卓可“添加到主屏幕”当App用。<br>
-    提醒规则：①新24h低点；②当前价 ≤ 低点 + 0.02。为防止狂弹：进入接近区间只提醒一次，离开后再允许下次提醒；并有10分钟冷却。
+    ✅ 这版会把 API Key 保存在你的浏览器本地（localStorage），下次打开自动填充；并且在 Key 存在时自动开始监控。<br>
+    提醒规则：①新24h低点；②当前价 ≤ 低点 + 0.02。防骚扰：进入接近区间只提醒一次，离开后再允许下次提醒；并有10分钟冷却。<br>
+    注意：网页在后台可能会被系统暂停，这是手机省电机制（不影响Key保存）。
   </div>
 
-  <div class="card row">
-    <div class="kpi">
+  <div class="card grid2">
+    <div>
       <div class="label">当前价（1 GBP =）</div>
       <div class="big" id="nowRate">--</div>
       <div class="muted" id="nowTime">--</div>
+      <div class="muted" id="deltaLine">--</div>
     </div>
-    <div class="kpi">
+    <div>
       <div class="label">近24小时最低</div>
       <div class="big" id="low24">--</div>
       <div class="muted" id="low24Time">--</div>
-    </div>
-    <div class="kpi">
-      <div class="label">接近阈值（low + 0.02）</div>
-      <div class="big" id="nearTh">--</div>
-      <div class="muted" id="nearState">--</div>
+      <div class="muted">接近阈值（low+0.02）：<span id="nearTh">--</span> ｜ <span id="nearState">--</span></div>
     </div>
   </div>
 
   <div class="card">
     <div class="row">
-      <div style="flex:1 1 280px">
-        <div class="label">Twelve Data API Key</div>
-        <input id="apiKey" placeholder="粘贴你的 TwelveData API Key（自用）" />
-        <div class="muted" style="margin-top:6px">提示：你可以只自己用；想更安全（不暴露Key）我也能给你做“代理版”。</div>
+      <div style="flex:1 1 320px">
+        <div class="label">Twelve Data API Key（自动记住）</div>
+        <input id="apiKey" placeholder="粘贴你的 TwelveData API Key（只保存在你手机本地）" />
+        <div class="muted" style="margin-top:6px">
+          不想每次手动点“开始”？只要Key已保存，本页会自动开始监控。
+        </div>
       </div>
       <div style="flex:1 1 200px">
         <div class="label">刷新间隔（秒）</div>
@@ -68,6 +79,7 @@
       <button id="btnStart">开始监控</button>
       <button id="btnStop">停止</button>
       <button id="btnNotify">开启浏览器通知</button>
+      <button id="btnForgetKey">忘记API Key</button>
       <button id="btnReset">清空24h缓存</button>
     </div>
   </div>
@@ -79,11 +91,15 @@
 </div>
 
 <script>
+  // ===== 配置 =====
   const PAIR = "GBP/CNY";
-  const STORAGE_KEY = "gbp_cny_points_24h_v1";
+  const STORAGE_POINTS = "gbp_cny_points_24h_v1";
+  const STORAGE_KEY = "twelve_api_key_v1";
+
   const NEAR_DELTA = 0.02;
   const COOLDOWN_MS = 10 * 60 * 1000;
 
+  // ===== 状态 =====
   let timer = null;
   let lastRate = null;
   let lastLowNotified = null;
@@ -102,11 +118,12 @@
     el.prepend(span);
   }
 
+  // ===== 本地存储：points =====
   function loadPoints() {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); }
+    try { return JSON.parse(localStorage.getItem(STORAGE_POINTS) || "[]"); }
     catch { return []; }
   }
-  function savePoints(points) { localStorage.setItem(STORAGE_KEY, JSON.stringify(points)); }
+  function savePoints(points) { localStorage.setItem(STORAGE_POINTS, JSON.stringify(points)); }
   function prune24h(points) {
     const cutoff = Date.now() - 24*60*60*1000;
     return points.filter(p => p.t >= cutoff);
@@ -118,6 +135,7 @@
     return m;
   }
 
+  // ===== 通知 =====
   async function ensureNotifyPermission() {
     if (!("Notification" in window)) { log("浏览器不支持通知。", "warn"); return false; }
     if (Notification.permission === "granted") return true;
@@ -128,14 +146,18 @@
 
   function alertUser(title, body) {
     log(`🔔 ${title} - ${body}`, "ok");
+    // 弹窗
     alert(`${title}\n\n${body}`);
+    // 震动（安卓多数可用）
     if ("vibrate" in navigator) navigator.vibrate([200, 80, 200]);
+    // 浏览器通知（可选）
     if ("Notification" in window && Notification.permission === "granted") {
       new Notification(title, { body });
     }
     lastAlertTs = Date.now();
   }
 
+  // ===== 数据源：Twelve Data =====
   function tdUrl(apiKey) {
     const base = "https://api.twelvedata.com/time_series";
     const params = new URLSearchParams({
@@ -148,9 +170,25 @@
     return `${base}?${params.toString()}`;
   }
 
+  function setDeltaLine(latestV) {
+    const el = $("deltaLine");
+    if (!Number.isFinite(latestV) || !Number.isFinite(lastRate)) {
+      el.textContent = "--";
+      el.className = "muted";
+      return;
+    }
+    const diff = latestV - lastRate;
+    const pct = lastRate ? (diff / lastRate * 100) : 0;
+    el.textContent = `较上次：${diff>=0?"+":""}${diff.toFixed(4)}（${diff>=0?"+":""}${pct.toFixed(3)}%）`;
+    el.className = "muted " + (diff >= 0 ? "deltaUp" : "deltaDown");
+  }
+
   async function fetchAndUpdate() {
     const apiKey = $("apiKey").value.trim();
     if (!apiKey) { log("请先填写 API Key。", "warn"); return; }
+
+    // ✅ 自动记住 key
+    localStorage.setItem(STORAGE_KEY, apiKey);
 
     try {
       log("拉取 1min 数据…");
@@ -192,7 +230,9 @@
         ? (latestV <= nearTh ? "在接近区间 ✅" : "不在接近区间")
         : "--";
 
-      // 新低提醒
+      setDeltaLine(latestV);
+
+      // ===== 提醒：新低 =====
       if (Number.isFinite(lowV)) {
         if (lastLowNotified === null) lastLowNotified = lowV;
         if (lowV < lastLowNotified) {
@@ -202,7 +242,7 @@
         }
       }
 
-      // 接近低点提醒（进入区间提醒一次，离开解锁）
+      // ===== 提醒：接近低点 =====
       if (Number.isFinite(latestV) && Number.isFinite(lowV)) {
         const isNear = latestV <= (lowV + NEAR_DELTA);
         if (isNear && !nearLock) {
@@ -217,13 +257,7 @@
         }
       }
 
-      if (Number.isFinite(latestV) && Number.isFinite(lastRate)) {
-        const diff = latestV - lastRate;
-        const pct = lastRate ? (diff / lastRate * 100) : 0;
-        log(`更新完成：当前 ${latestV.toFixed(4)}（${diff>=0?"+":""}${diff.toFixed(4)} / ${diff>=0?"+":""}${pct.toFixed(3)}%） 样本:${points.length}`, "ok");
-      } else {
-        log(`更新完成：当前 ${fmt(latestV)} 样本:${points.length}`, "ok");
-      }
+      log(`更新完成：当前 ${fmt(latestV)}｜24h低点 ${fmt(lowV)}｜样本 ${points.length}`, "ok");
       lastRate = latestV;
 
     } catch (e) {
@@ -245,6 +279,7 @@
     log("已停止。");
   }
 
+  // ===== 按钮 =====
   $("btnStart").onclick = start;
   $("btnStop").onclick = stop;
   $("btnNotify").onclick = async () => {
@@ -252,7 +287,7 @@
     log(ok ? "通知权限已开启。" : "通知权限未开启/被拒绝。", ok ? "ok" : "warn");
   };
   $("btnReset").onclick = () => {
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_POINTS);
     lastRate = null;
     lastLowNotified = null;
     nearLock = false;
@@ -263,8 +298,29 @@
     $("nowTime").textContent = "--";
     $("low24Time").textContent = "--";
     $("nearState").textContent = "--";
-    log("已清空本地24h缓存与提醒状态。", "ok");
+    $("deltaLine").textContent = "--";
+    $("deltaLine").className = "muted";
+    log("已清空24h缓存与提醒状态。", "ok");
   };
+  $("btnForgetKey").onclick = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    $("apiKey").value = "";
+    log("已忘记 API Key（仅清除本地保存）。", "ok");
+    alert("已清除本地保存的 API Key。");
+  };
+
+  // ✅ 页面加载：自动填充 key，自动开始
+  window.addEventListener("load", () => {
+    const savedKey = localStorage.getItem(STORAGE_KEY);
+    if (savedKey) {
+      $("apiKey").value = savedKey;
+      log("已自动填充 API Key。", "ok");
+      // 自动开始监控
+      start();
+    } else {
+      log("未检测到已保存的 API Key。请粘贴 Key 后点击“开始监控”。");
+    }
+  });
 </script>
 </body>
 </html>
