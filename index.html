@@ -27,6 +27,7 @@
     .deltaDown { color:#FF6B6B; }
     .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     @media (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } }
+    a { color:#cfcfd6; }
   </style>
 </head>
 <body>
@@ -40,9 +41,10 @@
   </h2>
 
   <div class="muted">
-    ✅ 这版会把 API Key 保存在你的浏览器本地（localStorage），下次打开自动填充；并且在 Key 存在时自动开始监控。<br>
+    ✅ API Key 保存在你手机/浏览器本地（localStorage），下次打开自动填充；Key 存在时会自动开始监控。<br>
     提醒规则：①新24h低点；②当前价 ≤ 低点 + 0.02。防骚扰：进入接近区间只提醒一次，离开后再允许下次提醒；并有10分钟冷却。<br>
-    注意：网页在后台可能会被系统暂停，这是手机省电机制（不影响Key保存）。
+    注意：网页在后台可能会被系统暂停（省电机制），但不影响Key保存。<br>
+    网址：<a href="https://centralshai81.github.io/gbp-monitor/" target="_blank" rel="noreferrer">https://centralshai81.github.io/gbp-monitor/</a>
   </div>
 
   <div class="card grid2">
@@ -66,7 +68,7 @@
         <div class="label">Twelve Data API Key（自动记住）</div>
         <input id="apiKey" placeholder="粘贴你的 TwelveData API Key（只保存在你手机本地）" />
         <div class="muted" style="margin-top:6px">
-          不想每次手动点“开始”？只要Key已保存，本页会自动开始监控。
+          提示：先点一次“开启浏览器通知”并允许；之后就能收到通知（弹窗/震动/通知）。
         </div>
       </div>
       <div style="flex:1 1 200px">
@@ -79,6 +81,7 @@
       <button id="btnStart">开始监控</button>
       <button id="btnStop">停止</button>
       <button id="btnNotify">开启浏览器通知</button>
+      <button id="btnTest">测试提醒</button>
       <button id="btnForgetKey">忘记API Key</button>
       <button id="btnReset">清空24h缓存</button>
     </div>
@@ -137,7 +140,7 @@
 
   // ===== 通知 =====
   async function ensureNotifyPermission() {
-    if (!("Notification" in window)) { log("浏览器不支持通知。", "warn"); return false; }
+    if (!("Notification" in window)) { log("浏览器不支持通知（Notification API）。", "warn"); return false; }
     if (Notification.permission === "granted") return true;
     const res = await Notification.requestPermission();
     return res === "granted";
@@ -282,10 +285,22 @@
   // ===== 按钮 =====
   $("btnStart").onclick = start;
   $("btnStop").onclick = stop;
+
   $("btnNotify").onclick = async () => {
     const ok = await ensureNotifyPermission();
-    log(ok ? "通知权限已开启。" : "通知权限未开启/被拒绝。", ok ? "ok" : "warn");
+    log(ok ? "通知权限已开启（允许后才会发系统通知）。" : "通知权限未开启/被拒绝。", ok ? "ok" : "warn");
+    if (!ok) {
+      log("如果你是在微信内置浏览器打开，通知可能不支持；请用Chrome/系统浏览器打开。", "warn");
+    }
   };
+
+  // ✅ 你要的：一键测试提醒
+  $("btnTest").onclick = async () => {
+    // 先尽量拉起通知权限
+    await ensureNotifyPermission();
+    alertUser("GBP/CNY 测试提醒", "如果你看到弹窗/震动/通知，说明提醒功能正常");
+  };
+
   $("btnReset").onclick = () => {
     localStorage.removeItem(STORAGE_POINTS);
     lastRate = null;
@@ -302,6 +317,7 @@
     $("deltaLine").className = "muted";
     log("已清空24h缓存与提醒状态。", "ok");
   };
+
   $("btnForgetKey").onclick = () => {
     localStorage.removeItem(STORAGE_KEY);
     $("apiKey").value = "";
@@ -315,7 +331,6 @@
     if (savedKey) {
       $("apiKey").value = savedKey;
       log("已自动填充 API Key。", "ok");
-      // 自动开始监控
       start();
     } else {
       log("未检测到已保存的 API Key。请粘贴 Key 后点击“开始监控”。");
