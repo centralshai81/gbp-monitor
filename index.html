@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>GBP/CNY 24h低点提醒</title>
+  <meta name="theme-color" content="#111111">
+  <style>
+    body { font-family: system-ui,-apple-system,Segoe UI,Roboto,"PingFang SC","Microsoft YaHei",sans-serif; margin:0; background:#0b0b0c; color:#eee; }
+    .wrap { max-width: 820px; margin: 0 auto; padding: 16px; }
+    h2 { margin: 8px 0 6px; }
+    .muted { color:#a9a9b2; font-size:13px; line-height: 1.4; }
+    .card { background:#141416; border:1px solid #242428; border-radius: 14px; padding: 14px; margin: 12px 0; }
+    .row { display:flex; gap:12px; flex-wrap:wrap; }
+    .kpi { flex:1 1 220px; }
+    .label { color:#a9a9b2; font-size: 13px; }
+    .big { font-size: 32px; font-weight: 800; margin-top: 6px; }
+    .btnrow { display:flex; gap:10px; flex-wrap:wrap; margin-top: 10px; }
+    button { background:#2a2a31; color:#fff; border:1px solid #3a3a44; padding:10px 12px; border-radius: 12px; font-weight: 650; }
+    button:active { transform: translateY(1px); }
+    input { width:100%; background:#0f0f12; border:1px solid #30303a; color:#fff; padding:10px 12px; border-radius:12px; }
+    .log { font-family: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size: 12px; white-space: pre-wrap; line-height: 1.35; }
+    .ok { color:#7CFC9A; }
+    .warn { color:#FFD166; }
+    .pill { display:inline-block; padding:4px 8px; border:1px solid #3a3a44; border-radius:999px; font-size:12px; color:#cfcfd6; margin-left:6px; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h2>GBP/CNY 实时监控 <span class="pill">60s</span> <span class="pill">24h低点</span> <span class="pill">≤0.02提醒</span></h2>
+  <div class="muted">
+    前台打开时每分钟刷新；安卓可“添加到主屏幕”当App用。<br>
+    提醒规则：①新24h低点；②当前价 ≤ 低点 + 0.02。为防止狂弹：进入接近区间只提醒一次，离开后再允许下次提醒；并有10分钟冷却。
+  </div>
+
+  <div class="card row">
+    <div class="kpi">
+      <div class="label">当前价（1 GBP =）</div>
+      <div class="big" id="nowRate">--</div>
+      <div class="muted" id="nowTime">--</div>
+    </div>
+    <div class="kpi">
+      <div class="label">近24小时最低</div>
+      <div class="big" id="low24">--</div>
+      <div class="muted" id="low24Time">--</div>
+    </div>
+    <div class="kpi">
+      <div class="label">接近阈值（low + 0.02）</div>
+      <div class="big" id="nearTh">--</div>
+      <div class="muted" id="nearState">--</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div style="flex:1 1 280px">
+        <div class="label">Twelve Data API Key</div>
+        <input id="apiKey" placeholder="粘贴你的 TwelveData API Key（自用）" />
+        <div class="muted" style="margin-top:6px">提示：你可以只自己用；想更安全（不暴露Key）我也能给你做“代理版”。</div>
+      </div>
+      <div style="flex:1 1 200px">
+        <div class="label">刷新间隔（秒）</div>
+        <input id="intervalSec" type="number" value="60" min="15" />
+      </div>
+    </div>
+
+    <div class="btnrow">
+      <button id="btnStart">开始监控</button>
+      <button id="btnStop">停止</button>
+      <button id="btnNotify">开启浏览器通知</button>
+      <button id="btnReset">清空24h缓存</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="label">日志</div>
+    <div class="log" id="log"></div>
+  </div>
+</div>
+
+<script>
+  const PAIR = "GBP/CNY";
+  const STORAGE_KEY = "gbp_cny_points_24h_v1";
+  const NEAR_DELTA = 0.02;
+  const COOLDOWN_MS = 10 * 60 * 1000;
+
+  let timer = null;
+  let lastRate = null;
+  let lastLowNotified = null;
+  let nearLock = false;
+  let lastAlertTs = 0;
+
+  const $ = (id) => document.getElementById(id);
+  const fmt = (x, n=4) => Number.isFinite(Number(x)) ? Number(x).toFixed(n) : "--";
+
+  function log(msg, cls="") {
+    const line = `[${new Date().toLocaleString()}] ${msg}\n`;
+    const el = $("log");
+    const span = document.createElement("span");
+    if (cls) span.className = cls;
+    span.textContent = line;
+    el.prepend(span);
+  }
+
+  function loadPoints() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); }
+    catch { return []; }
+  }
+  function savePoints(points) { localStorage.setItem(STORAGE_KEY, JSON.stringify(points)); }
+  function prune24h(points) {
+    const cutoff = Date.now() - 24*60*60*1000;
+    return points.filter(p => p.t >= cutoff);
+  }
+  function computeLow(points) {
+    if (!points.length) return null;
+    let m = points[0];
+    for (const p of points) if (p.v < m.v) m = p;
+    return m;
+  }
+
+  async function ensureNotifyPermission() {
+    if (!("Notification" in window)) { log("浏览器不支持通知。", "warn"); return false; }
+    if (Notification.permission === "granted") return true;
+    const res = await Notification.requestPermission();
+    return res === "granted";
+  }
+  function canAlertNow() { return (Date.now() - lastAlertTs) >= COOLDOWN_MS; }
+
+  function alertUser(title, body) {
+    log(`🔔 ${title} - ${body}`, "ok");
+    alert(`${title}\n\n${body}`);
+    if ("vibrate" in navigator) navigator.vibrate([200, 80, 200]);
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification(title, { body });
+    }
+    lastAlertTs = Date.now();
+  }
+
+  function tdUrl(apiKey) {
+    const base = "https://api.twelvedata.com/time_series";
+    const params = new URLSearchParams({
+      symbol: PAIR,
+      interval: "1min",
+      outputsize: "1440",
+      format: "JSON",
+      apikey: apiKey
+    });
+    return `${base}?${params.toString()}`;
+  }
+
+  async function fetchAndUpdate() {
+    const apiKey = $("apiKey").value.trim();
+    if (!apiKey) { log("请先填写 API Key。", "warn"); return; }
+
+    try {
+      log("拉取 1min 数据…");
+      const resp = await fetch(tdUrl(apiKey), { cache: "no-store" });
+      const data = await resp.json();
+
+      if (data.status === "error") { log(`接口错误：${data.message || "unknown"}`, "warn"); return; }
+
+      const values = Array.isArray(data.values) ? data.values : [];
+      if (!values.length) { log("未拿到 values（可能是额度/限制）。", "warn"); return; }
+
+      let points = loadPoints();
+      const seen = new Set(points.map(p => p.t));
+
+      for (const it of values) {
+        const t = Date.parse(it.datetime);
+        const v = Number(it.close);
+        if (!Number.isFinite(t) || !Number.isFinite(v)) continue;
+        if (!seen.has(t)) { points.push({ t, v }); seen.add(t); }
+      }
+
+      points.sort((a,b)=>a.t-b.t);
+      points = prune24h(points);
+      savePoints(points);
+
+      const latest = points[points.length-1];
+      const low = computeLow(points);
+      const latestV = latest?.v;
+      const lowV = low?.v;
+
+      $("nowRate").textContent = fmt(latestV);
+      $("nowTime").textContent = latest ? new Date(latest.t).toLocaleString() : "--";
+      $("low24").textContent = fmt(lowV);
+      $("low24Time").textContent = low ? new Date(low.t).toLocaleString() : "--";
+
+      const nearTh = Number.isFinite(lowV) ? (lowV + NEAR_DELTA) : NaN;
+      $("nearTh").textContent = fmt(nearTh);
+      $("nearState").textContent = (Number.isFinite(latestV) && Number.isFinite(nearTh))
+        ? (latestV <= nearTh ? "在接近区间 ✅" : "不在接近区间")
+        : "--";
+
+      // 新低提醒
+      if (Number.isFinite(lowV)) {
+        if (lastLowNotified === null) lastLowNotified = lowV;
+        if (lowV < lastLowNotified) {
+          if (canAlertNow()) alertUser("新24小时低点", `1 GBP = ${lowV.toFixed(4)} CNY`);
+          else log(`新低出现但冷却中：${lowV.toFixed(4)}`, "warn");
+          lastLowNotified = lowV;
+        }
+      }
+
+      // 接近低点提醒（进入区间提醒一次，离开解锁）
+      if (Number.isFinite(latestV) && Number.isFinite(lowV)) {
+        const isNear = latestV <= (lowV + NEAR_DELTA);
+        if (isNear && !nearLock) {
+          if (canAlertNow()) {
+            const diff = latestV - lowV;
+            alertUser("接近24h低点提醒", `当前：${latestV.toFixed(4)}\n低点：${lowV.toFixed(4)}\n差值：${diff.toFixed(4)}（≤ 0.02）`);
+          } else log("进入接近区间但冷却中。", "warn");
+          nearLock = true;
+        } else if (!isNear && nearLock) {
+          nearLock = false;
+          log("已离开接近区间，下次再进入会再次提醒。");
+        }
+      }
+
+      if (Number.isFinite(latestV) && Number.isFinite(lastRate)) {
+        const diff = latestV - lastRate;
+        const pct = lastRate ? (diff / lastRate * 100) : 0;
+        log(`更新完成：当前 ${latestV.toFixed(4)}（${diff>=0?"+":""}${diff.toFixed(4)} / ${diff>=0?"+":""}${pct.toFixed(3)}%） 样本:${points.length}`, "ok");
+      } else {
+        log(`更新完成：当前 ${fmt(latestV)} 样本:${points.length}`, "ok");
+      }
+      lastRate = latestV;
+
+    } catch (e) {
+      log(`请求失败：${e?.message || e}`, "warn");
+    }
+  }
+
+  function start() {
+    stop();
+    const sec = Math.max(15, Number($("intervalSec").value) || 60);
+    log(`开始监控：每 ${sec}s 刷新。`, "ok");
+    fetchAndUpdate();
+    timer = setInterval(fetchAndUpdate, sec * 1000);
+  }
+
+  function stop() {
+    if (timer) clearInterval(timer);
+    timer = null;
+    log("已停止。");
+  }
+
+  $("btnStart").onclick = start;
+  $("btnStop").onclick = stop;
+  $("btnNotify").onclick = async () => {
+    const ok = await ensureNotifyPermission();
+    log(ok ? "通知权限已开启。" : "通知权限未开启/被拒绝。", ok ? "ok" : "warn");
+  };
+  $("btnReset").onclick = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    lastRate = null;
+    lastLowNotified = null;
+    nearLock = false;
+    lastAlertTs = 0;
+    $("nowRate").textContent = "--";
+    $("low24").textContent = "--";
+    $("nearTh").textContent = "--";
+    $("nowTime").textContent = "--";
+    $("low24Time").textContent = "--";
+    $("nearState").textContent = "--";
+    log("已清空本地24h缓存与提醒状态。", "ok");
+  };
+</script>
+</body>
+</html>
