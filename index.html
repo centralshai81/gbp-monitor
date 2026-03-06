@@ -3,86 +3,181 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>GBP/CNY 24h低点提醒</title>
+  <title>GBP/CNY 购汇监控</title>
   <meta name="theme-color" content="#111111">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body { font-family: system-ui,-apple-system,Segoe UI,Roboto,"PingFang SC","Microsoft YaHei",sans-serif; margin:0; background:#0b0b0c; color:#eee; }
-    .wrap { max-width: 860px; margin: 0 auto; padding: 16px; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+      margin: 0;
+      background: #0b0b0c;
+      color: #eee;
+    }
+    .wrap {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 16px;
+    }
     h2 { margin: 8px 0 6px; }
-    .muted { color:#a9a9b2; font-size:13px; line-height: 1.4; }
-    .card { background:#141416; border:1px solid #242428; border-radius: 14px; padding: 14px; margin: 12px 0; }
-    .row { display:flex; gap:12px; flex-wrap:wrap; }
-    .kpi { flex:1 1 240px; }
-    .label { color:#a9a9b2; font-size: 13px; }
-    .big { font-size: 34px; font-weight: 800; margin-top: 6px; }
-    .btnrow { display:flex; gap:10px; flex-wrap:wrap; margin-top: 10px; }
-    button { background:#2a2a31; color:#fff; border:1px solid #3a3a44; padding:10px 12px; border-radius: 12px; font-weight: 650; }
-    button:active { transform: translateY(1px); }
-    input { width:100%; background:#0f0f12; border:1px solid #30303a; color:#fff; padding:10px 12px; border-radius:12px; }
-    .log { font-family: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size: 12px; white-space: pre-wrap; line-height: 1.35; }
-    .ok { color:#7CFC9A; }
-    .warn { color:#FFD166; }
-    .pill { display:inline-block; padding:4px 8px; border:1px solid #3a3a44; border-radius:999px; font-size:12px; color:#cfcfd6; margin-left:6px; }
-    .deltaUp { color:#7CFC9A; }
-    .deltaDown { color:#FF6B6B; }
-    .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    @media (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } }
-    a { color:#cfcfd6; }
+    .muted {
+      color: #a9a9b2;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .card {
+      background: #141416;
+      border: 1px solid #242428;
+      border-radius: 14px;
+      padding: 14px;
+      margin: 12px 0;
+    }
+    .grid4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+    .grid2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .label {
+      color: #a9a9b2;
+      font-size: 13px;
+    }
+    .big {
+      font-size: 32px;
+      font-weight: 800;
+      margin-top: 6px;
+    }
+    .btnrow {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+    button {
+      background: #2a2a31;
+      color: #fff;
+      border: 1px solid #3a3a44;
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    input {
+      width: 100%;
+      background: #0f0f12;
+      border: 1px solid #30303a;
+      color: #fff;
+      padding: 10px 12px;
+      border-radius: 12px;
+      box-sizing: border-box;
+    }
+    .log {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      line-height: 1.35;
+    }
+    .ok { color: #7CFC9A; }
+    .warn { color: #FFD166; }
+    .deltaUp { color: #7CFC9A; }
+    .deltaDown { color: #FF6B6B; }
+    .pill {
+      display: inline-block;
+      padding: 4px 8px;
+      border: 1px solid #3a3a44;
+      border-radius: 999px;
+      font-size: 12px;
+      color: #cfcfd6;
+      margin-left: 6px;
+    }
+    canvas {
+      width: 100% !important;
+      max-height: 320px;
+    }
+    @media (max-width: 900px) {
+      .grid4 { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 640px) {
+      .grid4, .grid2 { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
 <div class="wrap">
   <h2>
-    GBP/CNY 实时监控
-    <span class="pill">60s</span>
-    <span class="pill">24h低点</span>
-    <span class="pill">≤0.02提醒</span>
-    <span class="pill">自动记住Key</span>
+    GBP/CNY 购汇监控
+    <span class="pill">市场价</span>
+    <span class="pill">预计中行购汇价</span>
+    <span class="pill">24h低点提醒</span>
   </h2>
 
   <div class="muted">
-    ✅ API Key 保存在你手机/浏览器本地（localStorage），下次打开自动填充；Key 存在时会自动开始监控。<br>
-    提醒规则：①新24h低点；②当前价 ≤ 低点 + 0.02。防骚扰：进入接近区间只提醒一次，离开后再允许下次提醒；并有10分钟冷却。<br>
-    注意：网页在后台可能会被系统暂停（省电机制），但不影响Key保存。<br>
-    网址：<a href="https://centralshai81.github.io/gbp-monitor/" target="_blank" rel="noreferrer">https://centralshai81.github.io/gbp-monitor/</a>
+    这版不再用 Twelve Data，避免额度限制。<br>
+    页面显示两种价格：市场价，以及按“市场价 + 银行加点”估算的预计中行购汇价。<br>
+    你可以自己调“银行加点”和“提醒阈值”。
   </div>
 
-  <div class="card grid2">
+  <div class="card grid4">
     <div>
-      <div class="label">当前价（1 GBP =）</div>
+      <div class="label">市场价（1 GBP =）</div>
       <div class="big" id="nowRate">--</div>
-      <div class="muted" id="nowTime">--</div>
-      <div class="muted" id="deltaLine">--</div>
+      <div class="muted" id="dataTime">数据日期：--</div>
     </div>
     <div>
-      <div class="label">近24小时最低</div>
+      <div class="label">预计中行购汇价</div>
+      <div class="big" id="bocBuyRate">--</div>
+      <div class="muted" id="bocRule">市场价 + 加点</div>
+    </div>
+    <div>
+      <div class="label">近24小时最低市场价</div>
       <div class="big" id="low24">--</div>
       <div class="muted" id="low24Time">--</div>
-      <div class="muted">接近阈值（low+0.02）：<span id="nearTh">--</span> ｜ <span id="nearState">--</span></div>
+    </div>
+    <div>
+      <div class="label">本地实时钟</div>
+      <div class="big" id="liveClock" style="font-size:28px;">--</div>
+      <div class="muted" id="deltaLine">--</div>
     </div>
   </div>
 
   <div class="card">
-    <div class="row">
-      <div style="flex:1 1 320px">
-        <div class="label">Twelve Data API Key（自动记住）</div>
-        <input id="apiKey" placeholder="粘贴你的 TwelveData API Key（只保存在你手机本地）" />
-        <div class="muted" style="margin-top:6px">
-          提示：先点一次“开启浏览器通知”并允许；之后就能收到通知（弹窗/震动/通知）。
-        </div>
-      </div>
-      <div style="flex:1 1 200px">
-        <div class="label">刷新间隔（秒）</div>
-        <input id="intervalSec" type="number" value="60" min="15" />
-      </div>
-    </div>
+    <div class="label" style="margin-bottom:8px;">最近24小时记录走势</div>
+    <canvas id="rateChart"></canvas>
+  </div>
 
+  <div class="card grid2">
+    <div>
+      <div class="label">银行加点（预计购汇价 = 市场价 + 加点）</div>
+      <input id="spreadInput" type="number" value="0.03" step="0.001" min="0" />
+      <div class="muted" style="margin-top:6px;">常用可试：0.02 / 0.03 / 0.04</div>
+    </div>
+    <div>
+      <div class="label">购汇提醒阈值（预计中行购汇价 ≤ 这个值时提醒）</div>
+      <input id="targetBuyRate" type="number" value="9.25" step="0.001" />
+      <div class="muted" style="margin-top:6px;">比如你希望低于 9.25 就提醒</div>
+    </div>
+  </div>
+
+  <div class="card grid2">
+    <div>
+      <div class="label">刷新间隔（秒）</div>
+      <input id="intervalSec" type="number" value="300" min="60" />
+    </div>
+    <div>
+      <div class="label">状态</div>
+      <div class="muted" id="nearState" style="margin-top:10px;">--</div>
+    </div>
+  </div>
+
+  <div class="card">
     <div class="btnrow">
       <button id="btnStart">开始监控</button>
       <button id="btnStop">停止</button>
       <button id="btnNotify">开启浏览器通知</button>
       <button id="btnTest">测试提醒</button>
-      <button id="btnForgetKey">忘记API Key</button>
       <button id="btnReset">清空24h缓存</button>
     </div>
   </div>
@@ -94,25 +189,26 @@
 </div>
 
 <script>
-  // ===== 配置 =====
-  const PAIR = "GBP/CNY";
-  const STORAGE_POINTS = "gbp_cny_points_24h_v1";
-  const STORAGE_KEY = "twelve_api_key_v1";
+  const STORAGE_POINTS = "gbp_cny_points_boc_v1";
+  const STORAGE_INTERVAL = "gbp_cny_interval_boc_v1";
+  const STORAGE_SPREAD = "gbp_cny_spread_boc_v1";
+  const STORAGE_TARGET = "gbp_cny_target_boc_v1";
 
   const NEAR_DELTA = 0.02;
   const COOLDOWN_MS = 10 * 60 * 1000;
 
-  // ===== 状态 =====
   let timer = null;
   let lastRate = null;
   let lastLowNotified = null;
   let nearLock = false;
   let lastAlertTs = 0;
+  let chart = null;
+  let buyRateLock = false;
 
   const $ = (id) => document.getElementById(id);
-  const fmt = (x, n=4) => Number.isFinite(Number(x)) ? Number(x).toFixed(n) : "--";
+  const fmt = (x, n = 4) => Number.isFinite(Number(x)) ? Number(x).toFixed(n) : "--";
 
-  function log(msg, cls="") {
+  function log(msg, cls = "") {
     const line = `[${new Date().toLocaleString()}] ${msg}\n`;
     const el = $("log");
     const span = document.createElement("span");
@@ -121,16 +217,20 @@
     el.prepend(span);
   }
 
-  // ===== 本地存储：points =====
   function loadPoints() {
     try { return JSON.parse(localStorage.getItem(STORAGE_POINTS) || "[]"); }
     catch { return []; }
   }
-  function savePoints(points) { localStorage.setItem(STORAGE_POINTS, JSON.stringify(points)); }
+
+  function savePoints(points) {
+    localStorage.setItem(STORAGE_POINTS, JSON.stringify(points));
+  }
+
   function prune24h(points) {
-    const cutoff = Date.now() - 24*60*60*1000;
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
     return points.filter(p => p.t >= cutoff);
   }
+
   function computeLow(points) {
     if (!points.length) return null;
     let m = points[0];
@@ -138,39 +238,48 @@
     return m;
   }
 
-  // ===== 通知 =====
+  function updateClock() {
+    $("liveClock").textContent = new Date().toLocaleTimeString();
+  }
+
   async function ensureNotifyPermission() {
-    if (!("Notification" in window)) { log("浏览器不支持通知（Notification API）。", "warn"); return false; }
+    if (!("Notification" in window)) {
+      log("浏览器不支持通知。", "warn");
+      return false;
+    }
     if (Notification.permission === "granted") return true;
     const res = await Notification.requestPermission();
     return res === "granted";
   }
-  function canAlertNow() { return (Date.now() - lastAlertTs) >= COOLDOWN_MS; }
+
+  function canAlertNow() {
+    return (Date.now() - lastAlertTs) >= COOLDOWN_MS;
+  }
 
   function alertUser(title, body) {
     log(`🔔 ${title} - ${body}`, "ok");
-    // 弹窗
     alert(`${title}\n\n${body}`);
-    // 震动（安卓多数可用）
     if ("vibrate" in navigator) navigator.vibrate([200, 80, 200]);
-    // 浏览器通知（可选）
     if ("Notification" in window && Notification.permission === "granted") {
       new Notification(title, { body });
     }
     lastAlertTs = Date.now();
   }
 
-  // ===== 数据源：Twelve Data =====
-  function tdUrl(apiKey) {
-    const base = "https://api.twelvedata.com/time_series";
-    const params = new URLSearchParams({
-      symbol: PAIR,
-      interval: "1min",
-      outputsize: "1440",
-      format: "JSON",
-      apikey: apiKey
+  async function fetchRate() {
+    const resp = await fetch("https://api.frankfurter.dev/v1/latest?base=GBP&symbols=CNY", {
+      cache: "no-store"
     });
-    return `${base}?${params.toString()}`;
+    const data = await resp.json();
+
+    if (!data || !data.rates || typeof data.rates.CNY !== "number") {
+      throw new Error("未获取到有效汇率数据");
+    }
+
+    return {
+      rate: data.rates.CNY,
+      dataDate: data.date || ""
+    };
   }
 
   function setDeltaLine(latestV) {
@@ -181,78 +290,142 @@
       return;
     }
     const diff = latestV - lastRate;
-    const pct = lastRate ? (diff / lastRate * 100) : 0;
-    el.textContent = `较上次：${diff>=0?"+":""}${diff.toFixed(4)}（${diff>=0?"+":""}${pct.toFixed(3)}%）`;
+    const pct = lastRate ? diff / lastRate * 100 : 0;
+    el.textContent = `较上次：${diff >= 0 ? "+" : ""}${diff.toFixed(4)}（${diff >= 0 ? "+" : ""}${pct.toFixed(3)}%）`;
     el.className = "muted " + (diff >= 0 ? "deltaUp" : "deltaDown");
   }
 
+  function updateChart(points24h) {
+    const labels = points24h.map(p =>
+      new Date(p.t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    );
+    const data = points24h.map(p => p.v);
+
+    const lowPoint = computeLow(points24h);
+    const lowVal = lowPoint ? lowPoint.v : null;
+    const lowLine = data.map(() => lowVal);
+
+    if (!chart) {
+      const ctx = $("rateChart").getContext("2d");
+      chart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "市场价 GBP/CNY",
+              data,
+              borderColor: "#4da3ff",
+              backgroundColor: "rgba(77,163,255,0.16)",
+              fill: true,
+              tension: 0.25,
+              pointRadius: 0,
+              borderWidth: 2
+            },
+            {
+              label: "24h Low",
+              data: lowLine,
+              borderColor: "#ff9f43",
+              borderDash: [6, 6],
+              pointRadius: 0,
+              borderWidth: 1.5,
+              fill: false
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              labels: { color: "#ccc" }
+            }
+          },
+          scales: {
+            x: {
+              ticks: { color: "#aaa", maxTicksLimit: 8 },
+              grid: { color: "rgba(255,255,255,0.05)" }
+            },
+            y: {
+              ticks: { color: "#aaa" },
+              grid: { color: "rgba(255,255,255,0.05)" }
+            }
+          }
+        }
+      });
+    } else {
+      chart.data.labels = labels;
+      chart.data.datasets[0].data = data;
+      chart.data.datasets[1].data = lowLine;
+      chart.update();
+    }
+  }
+
+  function getSpread() {
+    return Math.max(0, Number($("spreadInput").value) || 0.03);
+  }
+
+  function getTargetBuyRate() {
+    return Number($("targetBuyRate").value) || 9.25;
+  }
+
   async function fetchAndUpdate() {
-    const apiKey = $("apiKey").value.trim();
-    if (!apiKey) { log("请先填写 API Key。", "warn"); return; }
-
-    // ✅ 自动记住 key
-    localStorage.setItem(STORAGE_KEY, apiKey);
-
     try {
-      log("拉取 1min 数据…");
-      const resp = await fetch(tdUrl(apiKey), { cache: "no-store" });
-      const data = await resp.json();
-
-      if (data.status === "error") { log(`接口错误：${data.message || "unknown"}`, "warn"); return; }
-
-      const values = Array.isArray(data.values) ? data.values : [];
-      if (!values.length) { log("未拿到 values（可能是额度/限制）。", "warn"); return; }
+      log("拉取汇率数据…");
+      const { rate, dataDate } = await fetchRate();
 
       let points = loadPoints();
-      const seen = new Set(points.map(p => p.t));
-
-      for (const it of values) {
-        const t = Date.parse(it.datetime);
-        const v = Number(it.close);
-        if (!Number.isFinite(t) || !Number.isFinite(v)) continue;
-        if (!seen.has(t)) { points.push({ t, v }); seen.add(t); }
-      }
-
-      points.sort((a,b)=>a.t-b.t);
+      points.push({ t: Date.now(), v: rate, dataDate });
       points = prune24h(points);
       savePoints(points);
 
-      const latest = points[points.length-1];
+      const latest = points[points.length - 1];
       const low = computeLow(points);
-      const latestV = latest?.v;
-      const lowV = low?.v;
 
-      $("nowRate").textContent = fmt(latestV);
-      $("nowTime").textContent = latest ? new Date(latest.t).toLocaleString() : "--";
-      $("low24").textContent = fmt(lowV);
-      $("low24Time").textContent = low ? new Date(low.t).toLocaleString() : "--";
+      const spread = getSpread();
+      const expectedBocRate = Number(latest.v) + spread;
+      const targetBuyRate = getTargetBuyRate();
 
-      const nearTh = Number.isFinite(lowV) ? (lowV + NEAR_DELTA) : NaN;
-      $("nearTh").textContent = fmt(nearTh);
-      $("nearState").textContent = (Number.isFinite(latestV) && Number.isFinite(nearTh))
-        ? (latestV <= nearTh ? "在接近区间 ✅" : "不在接近区间")
-        : "--";
+      $("nowRate").textContent = fmt(latest?.v);
+      $("dataTime").textContent = dataDate ? `数据日期：${dataDate}` : "数据日期：--";
+      $("low24").textContent = fmt(low?.v);
+      $("low24Time").textContent = low ? `记录时间：${new Date(low.t).toLocaleString()}` : "--";
 
-      setDeltaLine(latestV);
+      $("bocBuyRate").textContent = fmt(expectedBocRate);
+      $("bocRule").textContent = `市场价 + ${spread.toFixed(3)}`;
 
-      // ===== 提醒：新低 =====
-      if (Number.isFinite(lowV)) {
-        if (lastLowNotified === null) lastLowNotified = lowV;
-        if (lowV < lastLowNotified) {
-          if (canAlertNow()) alertUser("新24小时低点", `1 GBP = ${lowV.toFixed(4)} CNY`);
-          else log(`新低出现但冷却中：${lowV.toFixed(4)}`, "warn");
-          lastLowNotified = lowV;
+      const nearTh = Number.isFinite(low?.v) ? low.v + NEAR_DELTA : NaN;
+      $("nearState").textContent =
+        (Number.isFinite(latest?.v) && Number.isFinite(nearTh))
+          ? (latest.v <= nearTh ? "市场价已进入接近低点区间 ✅" : "市场价未进入接近区间")
+          : "--";
+
+      setDeltaLine(latest?.v);
+      updateChart(points);
+
+      // 市场价新低提醒
+      if (Number.isFinite(low?.v)) {
+        if (lastLowNotified === null) lastLowNotified = low.v;
+        if (low.v < lastLowNotified) {
+          if (canAlertNow()) {
+            alertUser("新24小时低点", `市场价：1 GBP = ${low.v.toFixed(4)} CNY`);
+          } else {
+            log(`新低出现但冷却中：${low.v.toFixed(4)}`, "warn");
+          }
+          lastLowNotified = low.v;
         }
       }
 
-      // ===== 提醒：接近低点 =====
-      if (Number.isFinite(latestV) && Number.isFinite(lowV)) {
-        const isNear = latestV <= (lowV + NEAR_DELTA);
+      // 接近24h低点提醒
+      if (Number.isFinite(latest?.v) && Number.isFinite(low?.v)) {
+        const isNear = latest.v <= (low.v + NEAR_DELTA);
         if (isNear && !nearLock) {
           if (canAlertNow()) {
-            const diff = latestV - lowV;
-            alertUser("接近24h低点提醒", `当前：${latestV.toFixed(4)}\n低点：${lowV.toFixed(4)}\n差值：${diff.toFixed(4)}（≤ 0.02）`);
-          } else log("进入接近区间但冷却中。", "warn");
+            const diff = latest.v - low.v;
+            alertUser("接近24h低点提醒", `市场价：${latest.v.toFixed(4)}\n24h低点：${low.v.toFixed(4)}\n差值：${diff.toFixed(4)}（≤ 0.02）`);
+          } else {
+            log("进入接近区间但冷却中。", "warn");
+          }
           nearLock = true;
         } else if (!isNear && nearLock) {
           nearLock = false;
@@ -260,17 +433,39 @@
         }
       }
 
-      log(`更新完成：当前 ${fmt(latestV)}｜24h低点 ${fmt(lowV)}｜样本 ${points.length}`, "ok");
-      lastRate = latestV;
+      // 预计购汇价达到目标提醒
+      if (Number.isFinite(expectedBocRate) && Number.isFinite(targetBuyRate)) {
+        const hitTarget = expectedBocRate <= targetBuyRate;
+        if (hitTarget && !buyRateLock) {
+          if (canAlertNow()) {
+            alertUser(
+              "预计中行购汇价已到目标",
+              `预计购汇价：${expectedBocRate.toFixed(4)}\n目标价：${targetBuyRate.toFixed(4)}`
+            );
+          } else {
+            log("预计购汇价达到目标，但冷却中。", "warn");
+          }
+          buyRateLock = true;
+        } else if (!hitTarget && buyRateLock) {
+          buyRateLock = false;
+          log("预计购汇价已重新高于目标价，下次低于目标会再次提醒。");
+        }
+      }
+
+      log(`更新完成：市场价 ${fmt(latest?.v)}｜预计中行购汇价 ${fmt(expectedBocRate)}｜24h低点 ${fmt(low?.v)}`, "ok");
+      lastRate = latest?.v;
 
     } catch (e) {
-      log(`请求失败：${e?.message || e}`, "warn");
+      log(`接口错误：${e?.message || e}`, "warn");
     }
   }
 
   function start() {
     stop();
-    const sec = Math.max(15, Number($("intervalSec").value) || 60);
+    const sec = Math.max(60, Number($("intervalSec").value) || 300);
+    localStorage.setItem(STORAGE_INTERVAL, String(sec));
+    localStorage.setItem(STORAGE_SPREAD, String(getSpread()));
+    localStorage.setItem(STORAGE_TARGET, String(getTargetBuyRate()));
     log(`开始监控：每 ${sec}s 刷新。`, "ok");
     fetchAndUpdate();
     timer = setInterval(fetchAndUpdate, sec * 1000);
@@ -282,23 +477,17 @@
     log("已停止。");
   }
 
-  // ===== 按钮 =====
   $("btnStart").onclick = start;
   $("btnStop").onclick = stop;
 
   $("btnNotify").onclick = async () => {
     const ok = await ensureNotifyPermission();
-    log(ok ? "通知权限已开启（允许后才会发系统通知）。" : "通知权限未开启/被拒绝。", ok ? "ok" : "warn");
-    if (!ok) {
-      log("如果你是在微信内置浏览器打开，通知可能不支持；请用Chrome/系统浏览器打开。", "warn");
-    }
+    log(ok ? "通知权限已开启。" : "通知权限未开启/被拒绝。", ok ? "ok" : "warn");
   };
 
-  // ✅ 你要的：一键测试提醒
   $("btnTest").onclick = async () => {
-    // 先尽量拉起通知权限
     await ensureNotifyPermission();
-    alertUser("GBP/CNY 测试提醒", "如果你看到弹窗/震动/通知，说明提醒功能正常");
+    alertUser("购汇监控测试提醒", "如果你看到弹窗/震动/通知，说明提醒功能正常");
   };
 
   $("btnReset").onclick = () => {
@@ -306,35 +495,35 @@
     lastRate = null;
     lastLowNotified = null;
     nearLock = false;
+    buyRateLock = false;
     lastAlertTs = 0;
     $("nowRate").textContent = "--";
+    $("bocBuyRate").textContent = "--";
     $("low24").textContent = "--";
-    $("nearTh").textContent = "--";
-    $("nowTime").textContent = "--";
+    $("dataTime").textContent = "数据日期：--";
     $("low24Time").textContent = "--";
     $("nearState").textContent = "--";
     $("deltaLine").textContent = "--";
     $("deltaLine").className = "muted";
     log("已清空24h缓存与提醒状态。", "ok");
-  };
-
-  $("btnForgetKey").onclick = () => {
-    localStorage.removeItem(STORAGE_KEY);
-    $("apiKey").value = "";
-    log("已忘记 API Key（仅清除本地保存）。", "ok");
-    alert("已清除本地保存的 API Key。");
-  };
-
-  // ✅ 页面加载：自动填充 key，自动开始
-  window.addEventListener("load", () => {
-    const savedKey = localStorage.getItem(STORAGE_KEY);
-    if (savedKey) {
-      $("apiKey").value = savedKey;
-      log("已自动填充 API Key。", "ok");
-      start();
-    } else {
-      log("未检测到已保存的 API Key。请粘贴 Key 后点击“开始监控”。");
+    if (chart) {
+      chart.destroy();
+      chart = null;
     }
+  };
+
+  window.addEventListener("load", () => {
+    const savedInterval = localStorage.getItem(STORAGE_INTERVAL);
+    const savedSpread = localStorage.getItem(STORAGE_SPREAD);
+    const savedTarget = localStorage.getItem(STORAGE_TARGET);
+
+    if (savedInterval) $("intervalSec").value = savedInterval;
+    if (savedSpread) $("spreadInput").value = savedSpread;
+    if (savedTarget) $("targetBuyRate").value = savedTarget;
+
+    updateClock();
+    setInterval(updateClock, 1000);
+    start();
   });
 </script>
 </body>
